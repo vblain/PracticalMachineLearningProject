@@ -1,0 +1,322 @@
+---
+title: "Practical Machine Learning Project"
+author: "Vincent Blain"
+date: "1/7/2021"
+output: 
+  html_document:
+    keep_md: yes
+  pdf_document: default
+  md_document:
+    variant: markdown_github
+references:
+- id: HAR
+  title: 'Human Activity Recognition'
+  author: 
+    - family: Ugulino
+      given: W 
+    - family: Cardador
+      given: D 
+    - family: Vega
+      given: K 
+    - family: Velloso
+      given: E 
+    - family: Milidiu
+      given: R 
+    - family: Fuks
+      given: H 
+  container-title: 'Wearable Computing: Accelerometers Data Classification of Body Postures and Movements'
+  URL: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har
+  publisher: 'Groupware LES'
+  issued:
+    
+    year: '2016'
+- id: HAR2
+  title: 'Springer Berlin / Heidelberg'
+  author: 
+    - family: Curitiba
+      given: PR 
+  container-title: 'Advances in Artificial Intelligence - SBIA 2012. In: Lecture Notes in Computer Science'
+  URL: http:/groupware.les.inf.puc-rio.br/har#ixzz4TjvyTe8c
+  publisher: 'Google Scolar'
+  issued:
+    year: '2012'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(corrplot)
+library(dplyr)
+library(RColorBrewer)
+library(rattle)
+library(e1071)
+library(ISLR)
+
+```
+
+### Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: <http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har> (see the section on the Weight Lifting Exercise Dataset).
+
+### Data
+
+The training data for this project are available here: <https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv>
+
+The test data are available here: <https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv>
+
+
+The data for this project come from this source [see @HAR, pp. 52-61; also @HAR2, ISBN 978-3-642-34458-9. DOI: 10.1007/978-3-642-34459-6_6].
+
+
+### Download Data
+
+Download the data to a local folder to save processing time in future runs, and make sure that the test is based on the same results.
+
+```{r, cache = T}
+
+# Check if CSV directory exit, create if not
+if (!dir.exists("./csv")) {
+  dir.create("./csv")
+}
+
+pmlTrainFile <- "./csv/pml-training.csv"
+
+#check if file exist otherwise download
+if (!file.exists(pmlTrainFile)) {
+  pmlTrainingUrl <-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+  download.file(pmlTrainingUrl, destfile=pmlTrainFile, method="curl")
+}
+
+pmlTestFile <- "./csv/pml-testing.csv"
+
+#check if file exist otherwise download
+if (!file.exists(pmlTestFile)) {
+  pmlTestUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+  download.file(pmlTestUrl, destfile=pmlTestFile, method="curl")
+}
+
+```
+
+### Read the Data
+
+Load the data from CSV File downloaded into dataframe
+
+```{r, cache = T}
+trainFull <- read.csv("./csv/pml-training.csv", na.strings=c("NA","#DIV/0!",""), stringsAsFactors=T)
+testFull <- read.csv("./csv/pml-testing.csv", na.strings=c("NA","#DIV/0!",""), stringsAsFactors=T)
+```
+### Summary of the data
+
+trainFull dimension
+
+```{r, cache = T}
+dim(trainFull)
+```
+
+testFull dimension
+
+```{r, cache = T}
+dim(testFull)
+```
+### Cleaning the data
+
+Remove all columns that contain Nulls (NA)
+
+```{r, cache = T}
+trainClean <- trainFull[, colSums(is.na(trainFull)) == 0] 
+testClean <- testFull[, colSums(is.na(testFull)) == 0] 
+```  
+
+Remove columns that do not contribute to measurement
+
+```{r, cache = T}
+columnRemove <- grepl("X|timestamp", names(testClean))
+
+trainClean <- trainClean[, !columnRemove]
+testClean <- testClean[, !columnRemove]
+```  
+
+check for Near Zero 
+
+```{r, cache = T}
+nZero <- nearZeroVar(trainClean)
+
+trainClean <- trainClean[ , -nZero]
+testClean  <- testClean [ , -nZero]
+```  
+
+
+trainClean dimension - after removing columns and near zero variables
+
+```{r, cache = T}
+dim(trainClean)
+```
+testClean dimension - after removing columns
+
+```{r, cache = T}
+dim(testClean)
+```
+Get number of records that contain full data across all classes in trainClean
+
+```{r, cache = T}
+sum(complete.cases(trainClean))
+```
+Get number of records that contain full data across all classes in testClean
+
+```{r, cache = T}
+sum(complete.cases(testClean))
+```
+
+the cleaning process took the initial data from 160 variables down to 54 variables in the full and test dataset. 
+
+
+Observation of classes
+
+```{r, cache = T}
+table(trainClean$classe)
+```  
+```{r, cache = T}
+classeLevels <- levels(trainClean$classe)
+
+trainClean <- data.frame(data.matrix(trainClean))
+trainClean$classe <- factor(trainClean$classe, labels=classeLevels)
+testClean <- data.frame(data.matrix(testClean))
+```
+
+## Analisys
+
+Correlation analyses of variables before modeling using "FPC".
+
+```{r, cache = T}
+corr_matrix <- cor(trainClean[ , -55])
+corrplot(corr_matrix, order = "FPC", method = "circle", type = "lower", tl.cex = 0.6, tl.col = rgb(0, 0, 0))
+```  
+Darker colors represent higher correlation factor, Dark Red for negative correlation, and Dark Blue for Positive correlation. Further analysis of the data will be done to get more accurate results.
+
+### Prediction Models
+
+Using the clean training data we will now create 70/30 validation datasets.
+
+```{r}
+set.seed(20210110) 
+
+inBuild <- createDataPartition(y=trainClean$classe, p=0.7, list=FALSE)
+validation <- trainClean[-inBuild,]; 
+buildData <- trainClean[inBuild,]
+
+inTrain <- createDataPartition(y=buildData$classe, p=0.7, list=FALSE)
+training <- buildData[inTrain,]; 
+testing <- buildData[-inTrain,]
+
+dim(training)
+dim(testing)
+dim(validation)
+
+#inTrain <- createDataPartition(y=trainClean$classe, p=0.75, list=FALSE)
+#training <- trainClean[inTrain,]
+#testing <- trainClean[-inTrain,]
+```
+
+Lets find the most relevant fields
+
+```{r, cache = T}
+classeIndex <- which(names(training) == "classe")
+
+correlations <- cor(training[, -classeIndex], as.numeric(training$classe))
+bestCorrelations <- subset(as.data.frame(as.table(correlations)), abs(Freq)>0.3)
+bestCorrelations
+
+```
+The result would show that magent_arm_x and pitch_forearm have the best correlations.
+
+```{r}
+subset <- split(training, training$classe)
+modFit <- train(classe ~ ., method="rpart", data=training)
+fancyRpartPlot(modFit$finalModel, main="Decision Tree")
+```
+Regression tree output - would generate too small using fancyRpartPlot
+
+```{r, cache = T}
+modCART <- rpart(classe ~ ., data=training, method = "class")
+modCART
+```
+Predictions of the decision tree model on testing model.
+
+```{r, cache = T}
+predict_decision_tree <- predict(modCART, newdata = testing, type="class")
+conf_matrix_decision_tree <- confusionMatrix(predict_decision_tree, testing$classe)
+conf_matrix_decision_tree
+```
+We come up with and 82% accuracy rate. This would still be considered low as it is below 90%.
+
+Generate Plot from the confusion matrix
+
+```{r, cache = T}
+plot(conf_matrix_decision_tree$table, col = conf_matrix_decision_tree$byClass, 
+     main = paste("Decision Tree Model: Predictive Accuracy =", 
+                  round(conf_matrix_decision_tree$overall['Accuracy'], 4)
+                  )
+     )
+```
+
+## Boosted models
+
+Set model control for future use
+
+```{r, cache = T}
+modelControl <- trainControl(method = "repeatedcv", number = 5, repeats = 2)
+```
+
+### Generalized Boosted Model
+
+Fit GBM Model to training set
+
+```{r, cache = T}
+gbmFit  <- train(classe ~ ., data = training, method = "gbm", trControl = modelControl, verbose = FALSE)
+gbmFit$finalModel
+```
+Predict on testing set
+
+```{r, cache = T}
+gbmPredict <- predict(gbmFit, newdata = testing)
+cmGBM <- confusionMatrix(gbmPredict, factor(testing$classe))
+cmGBM
+```
+
+Using GBM the predictive accuracy is now 98.66%, significantly better than our previous Decision Tree model.
+
+### Random Forest Model
+
+```{r, cache = T}
+rfFit  <- train(classe ~ ., data = training, method = "rf", trControl = modelControl, verbose = FALSE)
+rfFit$finalModel
+
+```
+
+Run prediction random forest model on the testing dataset
+
+```{r, cache = T}
+rfPredict <- predict(rfFit, newdata = testing)
+cmRF <- confusionMatrix(rfPredict, factor(testing$classe))
+cmRF
+```
+
+For this model the random forest model is a clear winner to run predictions and get better accuracy as to the data with a 99.71% accuracy rate.
+
+## Conclusion
+
+In our analysis we used 3 different predictive models to gauge which would best predict our data, based on the prediction we can conclude that for this data the Random Forest Model is a clear winner as compared to Decision Tree Model, and Generalized Boosted Model.
+
+We will now apply the Random Forest Model to the test data set with 20 data points.
+
+```{r, cache = T}
+finalPredict <- predict(rfFit, newdata = testClean)
+cmFinalRF <- confusionMatrix(rfPredict, factor(testing$classe))
+cmFinalRF
+```
+
+# References

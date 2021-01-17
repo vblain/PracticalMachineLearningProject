@@ -318,5 +318,11 @@ finalPredict <- predict(rfFit, newdata = testClean)
 cmFinalRF <- confusionMatrix(rfPredict, factor(testing$classe))
 cmFinalRF
 ```
+##Quiz
+
+```{r, cache = T}
+quiz <- as.data.frame(predict(rfFit, newdata = testClean))
+quiz
+```
 
 # References

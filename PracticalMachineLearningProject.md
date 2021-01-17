@@ -5,12 +5,10 @@ date: "1/7/2021"
 output: 
   html_document:
     keep_md: yes
+  pdf_document: default
   md_document:
     variant: markdown_github
-  pdf_document: default
-
 references:
-
 - id: HAR
   title: 'Human Activity Recognition'
   author: 
@@ -30,8 +28,8 @@ references:
   URL: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har
   publisher: 'Groupware LES'
   issued:
-    year: '2016'
     
+    year: '2016'
 - id: HAR2
   title: 'Springer Berlin / Heidelberg'
   author: 
@@ -602,6 +600,37 @@ cmFinalRF
 ## Detection Rate         0.2844   0.1914   0.1739   0.1632   0.1836
 ## Detection Prevalence   0.2853   0.1918   0.1756   0.1634   0.1838
 ## Balanced Accuracy      0.9993   0.9941   0.9976   0.9976   0.9992
+```
+##Quiz
+
+
+```r
+quiz <- as.data.frame(predict(rfFit, newdata = testClean))
+quiz
+```
+
+```
+##    predict(rfFit, newdata = testClean)
+## 1                                    B
+## 2                                    A
+## 3                                    B
+## 4                                    A
+## 5                                    A
+## 6                                    E
+## 7                                    D
+## 8                                    B
+## 9                                    A
+## 10                                   A
+## 11                                   B
+## 12                                   C
+## 13                                   B
+## 14                                   A
+## 15                                   E
+## 16                                   E
+## 17                                   A
+## 18                                   B
+## 19                                   B
+## 20                                   B
 ```
 
 # References
